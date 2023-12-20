@@ -2,18 +2,16 @@
 
 package kotlinx.coroutines.internal
 
-import kotlinx.coroutines.*
-import kotlin.jvm.*
-
 /** @suppress **This is unstable API and it is subject to change.** */
 public expect open class LockFreeLinkedListNode() {
     public val isRemoved: Boolean
     public val nextNode: LockFreeLinkedListNode
     public val prevNode: LockFreeLinkedListNode
-    public fun addLast(node: LockFreeLinkedListNode)
+    public fun addLast(node: LockFreeLinkedListNode, allowedAfterPartialClosing: Boolean): Boolean
     public fun addOneIfEmpty(node: LockFreeLinkedListNode): Boolean
-    public inline fun addLastIf(node: LockFreeLinkedListNode, crossinline condition: () -> Boolean): Boolean
     public open fun remove(): Boolean
+    public fun close()
+    public fun closeForSome()
 
 }
 

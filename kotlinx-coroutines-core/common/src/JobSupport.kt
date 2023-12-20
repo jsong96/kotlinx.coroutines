@@ -160,12 +160,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
      * If final state of the job is [Incomplete], then it is boxed into [IncompleteStateBox]
      * and should be [unboxed][unboxState] before returning to user code.
      */
-    internal val state: Any? get() {
-        _state.loop { state -> // helper loop on state (complete in-progress atomic operations)
-            if (state !is OpDescriptor) return state
-            state.perform(this)
-        }
-    }
+    internal val state: Any? get() = _state.value
 
     /**
      * @suppress **This is unstable API and it is subject to change.**
@@ -325,6 +320,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
     private fun notifyCancelling(list: NodeList, cause: Throwable) {
         // first cancel our own children
         onCancelling(cause)
+        list.closeForSome()
         notifyHandlers<JobCancellingNode>(list, cause)
         // then cancel parent
         cancelParent(cause) // tentative cancellation -- does not matter if there is no parent
@@ -356,8 +352,10 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
         return parent.childCancelled(cause) || isCancellation
     }
 
-    private fun NodeList.notifyCompletion(cause: Throwable?) =
+    private fun NodeList.notifyCompletion(cause: Throwable?) {
+        close()
         notifyHandlers<JobNode>(this, cause)
+    }
 
     private inline fun <reified T: JobNode> notifyHandlers(list: NodeList, cause: Throwable?) {
         var exception: Throwable? = null
@@ -488,7 +486,11 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
                                 // or we are adding a child to a coroutine that is not completing yet
                                 if (rootCause == null || handler is ChildHandleNode && !state.isCompleting) {
                                     // Note: add node the list while holding lock on state (make sure it cannot change)
-                                    if (!addLastAtomic(state, list, node)) return@loopOnState // retry
+                                    if (!list.addLast(
+                                            node,
+                                            allowedAfterPartialClosing = handler is ChildHandleNode
+                                        )
+                                    ) return@loopOnState // retry
                                     // just return node if we don't have to invoke handler (not cancelling yet)
                                     if (rootCause == null) return node
                                     // otherwise handler is invoked immediately out of the synchronized section & handle returned
@@ -500,8 +502,24 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
                             // Note: attachChild uses invokeImmediately, so it gets invoked when adding to cancelled job
                             if (invokeImmediately) handler.invoke(rootCause)
                             return handle
-                        } else {
-                            if (addLastAtomic(state, list, node)) return node
+                        } else if (list.addLast(
+                                node, allowedAfterPartialClosing = !onCancelling || handler is ChildHandleNode
+                        )) {
+                            if (handler is ChildHandleNode) {
+                                /** Handling the following case:
+                                 * - A child requested to be added to the list;
+                                 * - We checked the state and saw that it wasn't `Finishing`;
+                                 * - Then, the job got cancelled and notified everyone about it;
+                                 * - Only then did we add the child to the list
+                                 * - and ended up here.
+                                 */
+                                val latestState = this@JobSupport.state
+                                if (latestState is Finishing) {
+                                    // Assumption: children always have `invokeImmediately = true`.
+                                    synchronized(latestState) { latestState.rootCause }?.let { handler.invoke(it) }
+                                }
+                            }
+                            return node
                         }
                     }
                 }
@@ -527,9 +545,6 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
         node.job = this
         return node
     }
-
-    private fun addLastAtomic(expect: Any, list: NodeList, node: JobNode) =
-        list.addLastIf(node) { this.state === expect }
 
     private fun promoteEmptyToNodeList(state: Empty) {
         // try to promote it to LIST state with the corresponding state
