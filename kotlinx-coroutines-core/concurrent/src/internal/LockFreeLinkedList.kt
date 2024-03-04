@@ -84,8 +84,8 @@ public actual open class LockFreeLinkedListNode {
         while (true) { // lock-free loop on prev.next
             val currentPrev = prevNode
             return when {
-                currentPrev is LIST_CLOSED_FOR_ALL -> false
-                currentPrev is LIST_CLOSED_FOR_SOME ->
+                currentPrev is ListClosedForAll -> false
+                currentPrev is ListClosedForSome ->
                     allowedAfterPartialClosing && currentPrev.addLast(node, allowedAfterPartialClosing)
                 currentPrev.addNext(node, this) -> true
                 else -> continue
@@ -96,12 +96,12 @@ public actual open class LockFreeLinkedListNode {
     /**
      * Forbids adding some of the new items to this list.
      */
-    public actual fun closeForSome() { addLast(LIST_CLOSED_FOR_SOME(), allowedAfterPartialClosing = false) }
+    public actual fun closeForSome() { addLast(ListClosedForSome(), allowedAfterPartialClosing = false) }
 
     /**
      * Forbids adding new items to this list.
      */
-    public actual fun close() { addLast(LIST_CLOSED_FOR_ALL(), allowedAfterPartialClosing = true) }
+    public actual fun close() { addLast(ListClosedForAll(), allowedAfterPartialClosing = true) }
 
     /**
      * Given:
@@ -291,6 +291,6 @@ public actual open class LockFreeLinkedListHead : LockFreeLinkedListNode() {
     override val isRemoved: Boolean get() = false
 }
 
-private class LIST_CLOSED_FOR_SOME: LockFreeLinkedListNode()
+private class ListClosedForSome: LockFreeLinkedListNode()
 
-private class LIST_CLOSED_FOR_ALL: LockFreeLinkedListNode()
+private class ListClosedForAll: LockFreeLinkedListNode()

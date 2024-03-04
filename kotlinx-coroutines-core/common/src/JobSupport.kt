@@ -515,7 +515,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
                                  */
                                 val latestState = this@JobSupport.state
                                 if (latestState is Finishing) {
-                                    // Assumption: children always have `invokeImmediately = true`.
+                                    assert { invokeImmediately }
                                     synchronized(latestState) { latestState.rootCause }?.let { handler.invoke(it) }
                                 }
                             }
