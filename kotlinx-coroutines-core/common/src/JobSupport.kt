@@ -320,7 +320,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
     private fun notifyCancelling(list: NodeList, cause: Throwable) {
         // first cancel our own children
         onCancelling(cause)
-        list.closeForSome()
+        list.close(LIST_CANCELLATION_PERMISSION)
         notifyHandlers<JobCancellingNode>(list, cause)
         // then cancel parent
         cancelParent(cause) // tentative cancellation -- does not matter if there is no parent
@@ -353,7 +353,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
     }
 
     private fun NodeList.notifyCompletion(cause: Throwable?) {
-        close()
+        close(LIST_MAX_PERMISSION)
         notifyHandlers<JobNode>(this, cause)
     }
 
@@ -466,13 +466,13 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
             if (onCancelling) {
                 val rootCause = (state as? Finishing)?.let { synchronized(it) { it.rootCause } }
                 if (rootCause == null) {
-                    list.addLast(node, allowedAfterPartialClosing = false)
+                    list.addLast(node, LIST_CANCELLATION_PERMISSION)
                 } else {
                     if (invokeImmediately) handler.invoke(rootCause)
                     return NonDisposableHandle
                 }
             } else {
-                list.addLast(node, allowedAfterPartialClosing = true)
+                list.addLast(node, LIST_MAX_PERMISSION)
             }
         }
         when {
@@ -987,7 +987,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
                     // or we are adding a child to a coroutine that is not completing yet
                     if (maybeRootCause == null || !state.isCompleting) {
                         // Note: add node the list while holding lock on state (make sure it cannot change)
-                        if (!list.addLast(node, allowedAfterPartialClosing = true))
+                        if (!list.addLast(node, LIST_MAX_PERMISSION))
                             return@tryPutNodeIntoList false // retry
                         // just return the node if we don't have to invoke the handler (not cancelling yet)
                         rootCause = maybeRootCause ?: return@tryPutNodeIntoList true
@@ -1000,7 +1000,7 @@ public open class JobSupport constructor(active: Boolean) : Job, ChildJob, Paren
                 }
                 node.invoke(rootCause)
                 return handle
-            } else list.addLast(node, allowedAfterPartialClosing = true).also { success ->
+            } else list.addLast(node, LIST_MAX_PERMISSION).also { success ->
                 if (success) {
                     /** Handling the following case:
                      * - A child requested to be added to the list;
@@ -1346,6 +1346,9 @@ private const val TRUE = 1
 private val SEALED = Symbol("SEALED")
 private val EMPTY_NEW = Empty(false)
 private val EMPTY_ACTIVE = Empty(true)
+
+private const val LIST_MAX_PERMISSION = Int.MAX_VALUE
+private const val LIST_CANCELLATION_PERMISSION = 0
 
 private class Empty(override val isActive: Boolean) : Incomplete {
     override val list: NodeList? get() = null

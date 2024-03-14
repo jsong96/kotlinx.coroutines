@@ -22,9 +22,8 @@ public open class LinkedListNode : DisposableHandle {
     public inline val prevNode get() = _prev
     public inline val isRemoved get() = _removed
 
-    public fun addLast(node: Node, allowedAfterPartialClosing: Boolean): Boolean = when (val prev = this._prev) {
-        is ListClosedForAll -> false
-        is ListClosedForSome -> allowedAfterPartialClosing && prev.addLast(node, allowedAfterPartialClosing)
+    public fun addLast(node: Node, clearanceLevel: Int): Boolean = when (val prev = this._prev) {
+        is ListClosed -> prev.maxForbidden < clearanceLevel && prev.addLast(node, clearanceLevel)
         else -> {
             node._next = this
             node._prev = prev
@@ -34,12 +33,8 @@ public open class LinkedListNode : DisposableHandle {
         }
     }
 
-    public fun closeForSome() {
-        addLast(ListClosedForSome(), allowedAfterPartialClosing = true)
-    }
-
-    public fun close() {
-        addLast(ListClosedForAll(), allowedAfterPartialClosing = false)
+    public fun close(maxForbidden: Int) {
+        addLast(ListClosed(maxForbidden), maxForbidden)
     }
 
     /*
@@ -64,7 +59,7 @@ public open class LinkedListNode : DisposableHandle {
 
     public fun addOneIfEmpty(node: Node): Boolean {
         if (_next !== this) return false
-        addLast(node, allowedAfterPartialClosing = false)
+        addLast(node, Int.MIN_VALUE)
         return true
     }
 }
@@ -88,6 +83,4 @@ public open class LinkedListHead : LinkedListNode() {
     public final override fun remove(): Nothing = throw UnsupportedOperationException()
 }
 
-private class ListClosedForSome: LinkedListNode()
-
-private class ListClosedForAll: LinkedListNode()
+private class ListClosed(val maxForbidden: Int): LinkedListNode()
