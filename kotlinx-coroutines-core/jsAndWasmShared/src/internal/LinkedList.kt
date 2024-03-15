@@ -22,8 +22,9 @@ public open class LinkedListNode : DisposableHandle {
     public inline val prevNode get() = _prev
     public inline val isRemoved get() = _removed
 
-    public fun addLast(node: Node, clearanceLevel: Int): Boolean = when (val prev = this._prev) {
-        is ListClosed -> prev.maxForbidden < clearanceLevel && prev.addLast(node, clearanceLevel)
+    public fun addLast(node: Node, permissionsBitmask: Int): Boolean = when (val prev = this._prev) {
+        is ListClosed ->
+            prev.forbiddenElementsBitmask and permissionsBitmask == 0 && prev.addLast(node, permissionsBitmask)
         else -> {
             node._next = this
             node._prev = prev
@@ -33,8 +34,8 @@ public open class LinkedListNode : DisposableHandle {
         }
     }
 
-    public fun close(maxForbidden: Int) {
-        addLast(ListClosed(maxForbidden), maxForbidden)
+    public fun close(forbiddenElementsBit: Int) {
+        addLast(ListClosed(forbiddenElementsBit), forbiddenElementsBit)
     }
 
     /*
@@ -83,4 +84,4 @@ public open class LinkedListHead : LinkedListNode() {
     public final override fun remove(): Nothing = throw UnsupportedOperationException()
 }
 
-private class ListClosed(val maxForbidden: Int): LinkedListNode()
+private class ListClosed(val forbiddenElementsBitmask: Int): LinkedListNode()
