@@ -87,6 +87,7 @@ public final class kotlinx/coroutines/CancellableContinuationKt {
 public final class kotlinx/coroutines/ChildContinuation {
 	public final field child Lkotlinx/coroutines/CancellableContinuationImpl;
 	public fun <init> (Lkotlinx/coroutines/CancellableContinuationImpl;)V
+	public fun getOnCancelling ()Z
 	public fun invoke (Ljava/lang/Throwable;)V
 }
 
